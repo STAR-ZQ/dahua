@@ -26,7 +26,7 @@ public class TrafficDto {
     private String info_addr_gps;
     private String info_addr;
     private String info_equip_code;
-    private String[] other_info = new String[100];
+    private String[] other_info = new String[1];
 
     public void setPlateTypeData(int plateType) {
         switch (plateType) {

@@ -13,7 +13,7 @@ public class FaceInfoDto {
     private String mask;
     private String beard;
     private int attractive;
-    private String face_captur_eangle;
+    private FaceCaptureAngle face_captur_eangle;
     private int face_quality;
     private int face_align_score;
     private int face_clarity;
@@ -24,7 +24,10 @@ public class FaceInfoDto {
     private String info_addr;
     private String info_equip_code;
     private String info_image_id;
-    private String[] other_props = new String[100];
+    /**
+     * 扩展字段  暂定长度为1
+     */
+    private String[] other_props = new String[1];
 
     /**
      * 根据编号code替换性别具体信息
@@ -228,5 +231,12 @@ public class FaceInfoDto {
                 break;
         }
         getFace_feature()[features] = featuresData;
+    }
+
+    @Data
+    public static class FaceCaptureAngle {
+        private int nPitch;
+        private int nYaw;
+        private int nRoll;
     }
 }

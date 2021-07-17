@@ -119,13 +119,13 @@ public class FaceRecognitionController {
                 return -1;
             }
 
-            getFaceData(dwAlarmType,pAlarmInfo,pBuffer,dwBufSize);
+            getFaceData(dwAlarmType, pAlarmInfo, pBuffer, dwBufSize);
 
             return 0;
         }
 
         public void getFaceData(int dwAlarmType, Pointer pAlarmInfo, Pointer pBuffer, int dwBufSize) {
-            System.out.println(dwAlarmType+"/"+NetSDKLib.EVENT_IVS_FACERECOGNITION);
+            System.out.println(dwAlarmType + "/" + NetSDKLib.EVENT_IVS_FACERECOGNITION);
             switch (dwAlarmType) {
                 case NetSDKLib.EVENT_IVS_FACERECOGNITION: // /< 人脸识别事件
                 {
@@ -150,11 +150,15 @@ public class FaceRecognitionController {
                     faceInfoDto.setSexData(msg.stuFaceData.emSex);
                     faceInfoDto.setAge(msg.stuFaceData.nAge);
                     for (int i = 0; i < msg.stuFaceData.emFeature.length; i++) {
-                        System.out.println("人脸特征："+msg.stuFaceData.emFeature[i]);
+                        System.out.println("人脸特征：" + msg.stuFaceData.emFeature[i]);
                         faceInfoDto.setFeaturesData(msg.stuFaceData.emFeature[i]);
                     }
                     faceInfoDto.setAttractive(msg.stuFaceData.nAttractive);
-                    faceInfoDto.setFace_captur_eangle(msg.stuFaceData.stuFaceCaptureAngle.toString());
+                    FaceInfoDto.FaceCaptureAngle eangle =new FaceInfoDto.FaceCaptureAngle();
+                    eangle.setNPitch(msg.stuFaceData.stuFaceCaptureAngle.nPitch);
+                    eangle.setNRoll(msg.stuFaceData.stuFaceCaptureAngle.nRoll);
+                    eangle.setNYaw(msg.stuFaceData.stuFaceCaptureAngle.nYaw);
+                    faceInfoDto.setFace_captur_eangle(eangle);
                     faceInfoDto.setFace_quality(msg.stuFaceData.nFaceQuality);
                     faceInfoDto.setFace_align_score(msg.stuFaceData.nFaceAlignScore);
                     faceInfoDto.setFace_clarity(msg.stuFaceData.nFaceClarity);
@@ -178,12 +182,12 @@ public class FaceRecognitionController {
                         e.printStackTrace();
                     }
                     httpMethod();
-                    System.out.println("数据库新增数据："+JSON.toJSONString(faceInfoDto));
+                    System.out.println("数据库新增数据：" + JSON.toJSONString(faceInfoDto));
                     // 释放内存
                     msg = null;
                     System.gc();
 
-                        break;
+                    break;
                 }
                 case NetSDKLib.EVENT_IVS_FACEDETECT: // /< 人脸检测
                 {
