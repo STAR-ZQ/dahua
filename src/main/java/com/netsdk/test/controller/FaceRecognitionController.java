@@ -1,23 +1,37 @@
 package com.netsdk.test.controller;
 
 import com.alibaba.fastjson.JSON;
-import com.netsdk.common.Res;
+import com.alibaba.fastjson.JSONObject;
 import com.netsdk.demo.module.FaceRecognitionModule;
 import com.netsdk.demo.module.LoginModule;
 import com.netsdk.lib.NetSDKLib;
 import com.netsdk.lib.ToolKits;
+import com.netsdk.test.dto.FaceInfoDto;
 import com.netsdk.test.entity.FaceInfo;
 import com.sun.jna.Pointer;
-import org.apache.commons.beanutils.BeanUtils;
+import org.apache.http.HttpEntity;
+import org.apache.http.NameValuePair;
+import org.apache.http.ParseException;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
-import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class FaceRecognitionController {
     // 设备断线通知回调
@@ -42,6 +56,7 @@ public class FaceRecognitionController {
     private static BufferedImage candidateBufferedImage = null;
 
     private FaceInfo faceInfo = new FaceInfo();
+    private FaceInfoDto faceInfoDto = new FaceInfoDto();
 
     // 用于人脸检测
     private static int groupId = 0;
@@ -105,6 +120,7 @@ public class FaceRecognitionController {
             }
 
             getFaceData(dwAlarmType,pAlarmInfo,pBuffer,dwBufSize);
+
             return 0;
         }
 
@@ -126,13 +142,34 @@ public class FaceRecognitionController {
                     // 耗时20ms左右
                     ToolKits.GetPointerData(pAlarmInfo, msg);
 
-                    faceInfo.setNAge(msg.stuFaceData.nAge);
-                    faceInfo.setEmSex(msg.stuFaceData.emSex);
-                    faceInfo.setEmRace(msg.stuFaceData.emRace);
-                    faceInfo.setEmEye(msg.stuFaceData.emEye);
-                    faceInfo.setEmMask(msg.stuFaceData.emMask);
-                    faceInfo.setEmMouth(msg.stuFaceData.emMouth);
-                    faceInfo.setEmBeard(msg.stuFaceData.emBeard);
+                    faceInfoDto.setBeardData(msg.stuFaceData.emBeard);
+                    faceInfoDto.setEyeData(msg.stuFaceData.emEye);
+                    faceInfoDto.setMaskData(msg.stuFaceData.emMask);
+                    faceInfoDto.setMouthData(msg.stuFaceData.emMouth);
+                    faceInfoDto.setRaceData((msg.stuFaceData.emRace));
+                    faceInfoDto.setSexData(msg.stuFaceData.emSex);
+                    faceInfoDto.setAge(msg.stuFaceData.nAge);
+                    for (int i = 0; i < msg.stuFaceData.emFeature.length; i++) {
+                        System.out.println("人脸特征："+msg.stuFaceData.emFeature[i]);
+                        faceInfoDto.setFeaturesData(msg.stuFaceData.emFeature[i]);
+                    }
+                    faceInfoDto.setAttractive(msg.stuFaceData.nAttractive);
+                    faceInfoDto.setFace_captur_eangle(msg.stuFaceData.stuFaceCaptureAngle.toString());
+                    faceInfoDto.setFace_quality(msg.stuFaceData.nFaceQuality);
+                    faceInfoDto.setFace_align_score(msg.stuFaceData.nFaceAlignScore);
+                    faceInfoDto.setFace_clarity(msg.stuFaceData.nFaceClarity);
+                    faceInfoDto.setTemperature_unit(msg.stuFaceData.emTemperatureUnit);
+                    faceInfoDto.setIs_overtemp(msg.stuFaceData.bIsOverTemp ? "Y" : "N");
+                    faceInfoDto.setIs_undertemp(msg.stuFaceData.bIsUnderTemp ? "Y" : "N");
+                    faceInfoDto.setInfo_addr("(" + msg.stuGPSInfo.nLongitude + "," + msg.stuGPSInfo.nLatidude + ")");
+
+//                    faceInfo.setNAge(msg.stuFaceData.nAge);
+//                    faceInfo.setEmSex(msg.stuFaceData.emSex);
+//                    faceInfo.setEmRace(msg.stuFaceData.emRace);
+//                    faceInfo.setEmEye(msg.stuFaceData.emEye);
+//                    faceInfo.setEmMask(msg.stuFaceData.emMask);
+//                    faceInfo.setEmMouth(msg.stuFaceData.emMouth);
+//                    faceInfo.setEmBeard(msg.stuFaceData.emBeard);
                     // 保存图片，获取图片缓存
                     // 耗时20ms左右
                     try {
@@ -140,7 +177,8 @@ public class FaceRecognitionController {
                     } catch (FileNotFoundException e) {
                         e.printStackTrace();
                     }
-                    System.out.println("数据库新增数据："+JSON.toJSONString(faceInfo));
+                    httpMethod();
+                    System.out.println("数据库新增数据："+JSON.toJSONString(faceInfoDto));
                     // 释放内存
                     msg = null;
                     System.gc();
@@ -168,6 +206,77 @@ public class FaceRecognitionController {
                 }
                 default:
                     break;
+            }
+        }
+
+        public void httpMethod() {
+            // 获得Http客户端(可以理解为:你得先有一个浏览器;注意:实际上HttpClient与浏览器是不一样的)
+            CloseableHttpClient httpClient = HttpClientBuilder.create().build();
+
+            // 创建Post请求
+            // 参数
+            URI uri = null;
+            try {
+                // 将参数放入键值对类NameValuePair中,再放入集合中
+                List<NameValuePair> params = new ArrayList<>();
+                params.add(new BasicNameValuePair("name", "人脸信息上报"));
+                params.add(new BasicNameValuePair("code", "7010"));
+                params.add(new BasicNameValuePair("token", "7DF72F9A741DFD817906A063EBF9548F"));
+                // 设置uri信息,并将参数集合放入uri;
+                // 注:这里也支持一个键值对一个键值对地往里面放setParameter(String key, String value)
+                uri = new URIBuilder().setScheme("http").setHost("localhost").setPort(12345)
+                        .setPath("/test").setParameters(params).build();
+            } catch (URISyntaxException e1) {
+                e1.printStackTrace();
+            }
+
+            HttpPost httpPost = new HttpPost(uri);
+            // HttpPost httpPost = new
+            // HttpPost("http://localhost:12345/doPostControllerThree1");
+
+            // 创建user参数
+//		User user = new User();
+//		user.setName("潘晓婷");
+//		user.setAge(18);
+//		user.setGender("女");
+//		user.setMotto("姿势要优雅~");
+
+
+            // 将user对象转换为json字符串，并放入entity中
+            StringEntity entity = new StringEntity(String.valueOf(JSON.parseObject(JSON.toJSONString(faceInfoDto))), "UTF-8");
+
+            // post请求是将参数放在请求体里面传过去的;这里将entity放入post请求体中
+            httpPost.setEntity(entity);
+
+            httpPost.setHeader("Content-Type", "application/json;charset=utf8");
+
+            // 响应模型
+            CloseableHttpResponse response = null;
+            try {
+                // 由客户端执行(发送)Post请求
+                response = httpClient.execute(httpPost);
+                // 从响应模型中获取响应实体
+                HttpEntity responseEntity = response.getEntity();
+
+                System.out.println("响应状态为:" + response.getStatusLine());
+                if (responseEntity != null) {
+                    System.out.println("响应内容长度为:" + responseEntity.getContentLength());
+                    System.out.println("响应内容为:" + EntityUtils.toString(responseEntity));
+                }
+            } catch (ParseException | IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    // 释放资源
+                    if (httpClient != null) {
+                        httpClient.close();
+                    }
+                    if (response != null) {
+                        response.close();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         }
 
@@ -357,6 +466,8 @@ public class FaceRecognitionController {
                 }
             }
         }
+
+
     }
 
     // 设备断线回调: 通过 CLIENT_Init 设置该回调函数，当设备出现断线时，SDK会调用该函数
