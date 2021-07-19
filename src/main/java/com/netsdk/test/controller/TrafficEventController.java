@@ -7,23 +7,48 @@ import com.netsdk.demo.module.LoginModule;
 import com.netsdk.demo.module.TrafficEventModule;
 import com.netsdk.lib.NetSDKLib;
 import com.netsdk.lib.ToolKits;
+import com.netsdk.test.dto.TrafficDto;
 import com.netsdk.test.entity.TrafficInfo;
 import com.netsdk.test.util.CapturePictureUtil;
 import com.sun.jna.CallbackThreadInitializer;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import org.apache.commons.beanutils.BeanUtils;
+import org.apache.http.HttpEntity;
+import org.apache.http.NameValuePair;
+import org.apache.http.ParseException;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.conn.ssl.TrustStrategy;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.ssl.SSLContextBuilder;
+import org.apache.http.util.EntityUtils;
+import org.springframework.util.StringUtils;
 
 import javax.annotation.PostConstruct;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.lang.reflect.InvocationTargetException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.List;
 
 public class TrafficEventController extends AWTEvent {
     public static NetSDKLib netsdk = NetSDKLib.NETSDK_INSTANCE;
@@ -47,6 +72,7 @@ public class TrafficEventController extends AWTEvent {
     private TrafficEventController target = this;
 
     private TrafficInfo trafficInfo = new TrafficInfo();
+    private TrafficDto trafficDto = new TrafficDto();
     private static final long serialVersionUID = 1L;
     public static final int EVENT_ID = AWTEvent.RESERVED_ID_MAX + 1;
     private BufferedImage snapImage = null;
@@ -194,13 +220,15 @@ public class TrafficEventController extends AWTEvent {
             bigPicture = SavePath.getSavePath().getSaveTrafficImagePath() + "Big_" + trafficInfo.getM_Utc().toStringTitle() + "_" +
                     trafficInfo.getM_FileCount() + "-" + trafficInfo.getM_FileIndex() + "-" + trafficInfo.getM_GroupID() + ".jpg";
             trafficInfo.setBigImgUrl(bigPicture);
+
             try {
                 snapImage = ImageIO.read(byteArrInput);
                 if (snapImage == null) {
                     return;
                 }
                 ImageIO.write(snapImage, "jpg", new File(bigPicture));
-            } catch (IOException e2) {
+                imgUrl(bigPicture);
+            } catch (Exception e2) {
                 e2.printStackTrace();
             }
 
@@ -232,7 +260,8 @@ public class TrafficEventController extends AWTEvent {
                             return;
                         }
                         ImageIO.write(plateImage, "jpg", new File(platePicture));
-                    } catch (IOException e) {
+                        imgUrl(platePicture);
+                    } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }
@@ -319,6 +348,29 @@ public class TrafficEventController extends AWTEvent {
                     trafficInfo.setM_FileLength(msg.stuObject.stPicInfo.dwFileLenth);
                     trafficInfo.setM_BoundingBox(msg.stuObject.BoundingBox);
 
+
+                    trafficDto.setEvent_name(Res.string().getEventName(NetSDKLib.EVENT_IVS_TRAFFICJUNCTION));
+                    try {
+                        trafficDto.setPlate_number(new String(msg.stuObject.szText, "GBK").trim());
+                    } catch (UnsupportedEncodingException e) {
+                        e.printStackTrace();
+                    }
+                    trafficDto.setPlate_type(new String(msg.stTrafficCar.szPlateType).trim());
+                    trafficDto.setFile_count(String.valueOf(msg.stuFileInfo.bCount));
+                    trafficDto.setFile_index(String.valueOf(msg.stuFileInfo.bIndex));
+                    trafficDto.setGroup_id(String.valueOf(msg.stuFileInfo.nGroupId));
+                    trafficDto.setIllegal_place(ToolKits.GetPointerDataToByteArr(msg.stTrafficCar.szDeviceAddress));
+                    trafficDto.setLane_number(String.valueOf(msg.nLane));
+                    trafficDto.setPlate_color(new String(msg.stTrafficCar.szPlateColor).trim());
+                    trafficDto.setVehicle_color(new String(msg.stTrafficCar.szVehicleColor).trim());
+                    trafficDto.setVehicle_type(new String(msg.stuVehicle.szObjectSubType).trim());
+                    trafficDto.setVehicle_size(Res.string().getTrafficSize(msg.stTrafficCar.nVehicleSize));
+                    trafficDto.setUtc(msg.UTC);
+                    trafficDto.setPicenable(String.valueOf(msg.stuObject.bPicEnble).trim());
+                    trafficDto.setOffset(msg.stuObject.stPicInfo.dwOffSet);
+                    trafficDto.setFilelength(msg.stuObject.stPicInfo.dwFileLenth);
+                    trafficDto.setBounding_box(msg.stuObject.BoundingBox);
+                    httpMethod();
                     break;
                 }
                 default:
@@ -326,6 +378,136 @@ public class TrafficEventController extends AWTEvent {
             }
         }
 
+        public void httpMethod() {// 创建链接  绕过证书校验
+            CloseableHttpClient httpClient = null;
+            try {
+                SSLContextBuilder builder = new SSLContextBuilder();
+                builder.loadTrustMaterial(null, new TrustStrategy() {
+                    // 证书校验忽略
+                    @Override
+                    public boolean isTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                        return true;
+                    }
+                });
+                httpClient = HttpClients.custom().setSSLContext(builder.build())
+                        .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).build();
+            } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
+                e.printStackTrace();
+            }
+
+            // 创建Post请求
+            // 参数
+            URI uri = null;
+            try {
+                // 将参数放入键值对类NameValuePair中,再放入集合中
+                List<NameValuePair> params = new ArrayList<>();
+                params.add(new BasicNameValuePair("name", "车辆信息上报"));
+                params.add(new BasicNameValuePair("code", "7020"));
+                params.add(new BasicNameValuePair("token", "7DF72F9A741DFD817906A063EBF9548F"));
+                // 设置uri信息,并将参数集合放入uri;
+                // 注:这里也支持一个键值对一个键值对地往里面放setParameter(String key, String value)
+                uri = new URIBuilder().setScheme("http").setHost("localhost").setPort(18081)
+                        .setPath("/test").setParameters(params).build();
+            } catch (URISyntaxException e1) {
+                e1.printStackTrace();
+            }
+
+            HttpPost httpPost = new HttpPost(uri);
+
+
+            // 将user对象转换为json字符串，并放入entity中
+            StringEntity entity = new StringEntity(String.valueOf(JSON.parseObject(JSON.toJSONString(trafficDto))), "UTF-8");
+
+            // post请求是将参数放在请求体里面传过去的;这里将entity放入post请求体中
+            httpPost.setEntity(entity);
+
+            httpPost.setHeader("Content-Type", "application/json;charset=utf8");
+
+            // 响应模型
+            CloseableHttpResponse response = null;
+            try {
+                // 由客户端执行(发送)Post请求
+                response = httpClient.execute(httpPost);
+                // 从响应模型中获取响应实体
+                HttpEntity responseEntity = response.getEntity();
+
+                System.out.println("响应状态为:" + response.getStatusLine());
+                if (responseEntity != null) {
+                    System.out.println("响应内容长度为:" + responseEntity.getContentLength());
+                    System.out.println("响应内容为:" + EntityUtils.toString(responseEntity));
+                }
+            } catch (ParseException | IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    // 释放资源
+                    if (httpClient != null) {
+                        httpClient.close();
+                    }
+                    if (response != null) {
+                        response.close();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        public void imgUrl(String imgUrl) throws IOException, URISyntaxException {
+            CloseableHttpClient httpClient = null;
+            try {
+                SSLContextBuilder builder = new SSLContextBuilder();
+                builder.loadTrustMaterial(null, new TrustStrategy() {
+                    // 证书校验忽略
+                    @Override
+                    public boolean isTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                        return true;
+                    }
+                });
+                httpClient = HttpClients.custom().setSSLContext(builder.build())
+                        .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).build();
+            } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
+                e.printStackTrace();
+            }
+            CloseableHttpResponse httpResponse = null;
+            RequestConfig requestConfig = RequestConfig.custom().setConnectTimeout(200000).setSocketTimeout(200000000).build();
+            URI uri = new URIBuilder().setScheme("http").setHost("localhost").setPort(18081)
+                    .setPath("/savePicByFormData").build();
+            HttpPost httpPost = new HttpPost(uri);
+            httpPost.setConfig(requestConfig);
+            MultipartEntityBuilder multipartEntityBuilder = MultipartEntityBuilder.create();
+
+            File file = new File(imgUrl);
+
+            //multipartEntityBuilder.addBinaryBody("file", file,ContentType.create("image/png"),"abc.pdf");
+            //当设置了setSocketTimeout参数后，以下代码上传PDF不能成功，将setSocketTimeout参数去掉后此可以上传成功。上传图片则没有个限制
+            //multipartEntityBuilder.addBinaryBody("file",file,ContentType.create("application/octet-stream"),"abd.pdf");
+            multipartEntityBuilder.addBinaryBody("file", file);
+            //multipartEntityBuilder.addPart("comment", new StringBody("This is comment", ContentType.TEXT_PLAIN));
+            multipartEntityBuilder.addTextBody("comment", "this is comment");
+            HttpEntity httpEntity = multipartEntityBuilder.build();
+            httpPost.setEntity(httpEntity);
+
+            httpResponse = httpClient.execute(httpPost);
+            HttpEntity responseEntity = httpResponse.getEntity();
+            int statusCode = httpResponse.getStatusLine().getStatusCode();
+            if (statusCode == 200) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(responseEntity.getContent()));
+                StringBuffer buffer = new StringBuffer();
+                String str = "";
+                while (!StringUtils.isEmpty(str = reader.readLine())) {
+                    buffer.append(str);
+                }
+
+                System.out.println(buffer.toString());
+            }
+
+            httpClient.close();
+            if (httpResponse != null) {
+                httpResponse.close();
+            }
+
+        }
     }
 
     /**

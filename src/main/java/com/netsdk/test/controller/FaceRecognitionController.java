@@ -12,24 +12,33 @@ import com.sun.jna.Pointer;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.ParseException;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.conn.ssl.TrustStrategy;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
+import org.springframework.util.StringUtils;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -154,7 +163,7 @@ public class FaceRecognitionController {
                         faceInfoDto.setFeaturesData(msg.stuFaceData.emFeature[i]);
                     }
                     faceInfoDto.setAttractive(msg.stuFaceData.nAttractive);
-                    FaceInfoDto.FaceCaptureAngle eangle =new FaceInfoDto.FaceCaptureAngle();
+                    FaceInfoDto.FaceCaptureAngle eangle = new FaceInfoDto.FaceCaptureAngle();
                     eangle.setNPitch(msg.stuFaceData.stuFaceCaptureAngle.nPitch);
                     eangle.setNRoll(msg.stuFaceData.stuFaceCaptureAngle.nRoll);
                     eangle.setNYaw(msg.stuFaceData.stuFaceCaptureAngle.nYaw);
@@ -182,7 +191,6 @@ public class FaceRecognitionController {
                         e.printStackTrace();
                     }
                     httpMethod();
-                    System.out.println("数据库新增数据：" + JSON.toJSONString(faceInfoDto));
                     // 释放内存
                     msg = null;
                     System.gc();
@@ -215,7 +223,21 @@ public class FaceRecognitionController {
 
         public void httpMethod() {
             // 获得Http客户端(可以理解为:你得先有一个浏览器;注意:实际上HttpClient与浏览器是不一样的)
-            CloseableHttpClient httpClient = HttpClientBuilder.create().build();
+            CloseableHttpClient httpClient = null;
+            try {
+                SSLContextBuilder builder = new SSLContextBuilder();
+                builder.loadTrustMaterial(null, new TrustStrategy() {
+                    // 证书校验忽略
+                    @Override
+                    public boolean isTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                        return true;
+                    }
+                });
+                httpClient = HttpClients.custom().setSSLContext(builder.build())
+                        .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).build();
+            } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
+                e.printStackTrace();
+            }
 
             // 创建Post请求
             // 参数
@@ -228,22 +250,13 @@ public class FaceRecognitionController {
                 params.add(new BasicNameValuePair("token", "7DF72F9A741DFD817906A063EBF9548F"));
                 // 设置uri信息,并将参数集合放入uri;
                 // 注:这里也支持一个键值对一个键值对地往里面放setParameter(String key, String value)
-                uri = new URIBuilder().setScheme("http").setHost("localhost").setPort(12345)
+                uri = new URIBuilder().setScheme("http").setHost("localhost").setPort(18081)
                         .setPath("/test").setParameters(params).build();
             } catch (URISyntaxException e1) {
                 e1.printStackTrace();
             }
 
             HttpPost httpPost = new HttpPost(uri);
-            // HttpPost httpPost = new
-            // HttpPost("http://localhost:12345/doPostControllerThree1");
-
-            // 创建user参数
-//		User user = new User();
-//		user.setName("潘晓婷");
-//		user.setAge(18);
-//		user.setGender("女");
-//		user.setMotto("姿势要优雅~");
 
 
             // 将user对象转换为json字符串，并放入entity中
@@ -284,6 +297,62 @@ public class FaceRecognitionController {
             }
         }
 
+        public void imgUrl(String imgUrl) throws IOException, URISyntaxException {
+            CloseableHttpClient httpClient = null;
+            try {
+                SSLContextBuilder builder = new SSLContextBuilder();
+                builder.loadTrustMaterial(null, new TrustStrategy() {
+                    // 证书校验忽略
+                    @Override
+                    public boolean isTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                        return true;
+                    }
+                });
+                httpClient = HttpClients.custom().setSSLContext(builder.build())
+                        .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).build();
+            } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
+                e.printStackTrace();
+            }
+            CloseableHttpResponse httpResponse = null;
+            RequestConfig requestConfig = RequestConfig.custom().setConnectTimeout(200000).setSocketTimeout(200000000).build();
+            URI uri = new URIBuilder().setScheme("http").setHost("localhost").setPort(18081)
+                    .setPath("/savePicByFormData").build();
+            HttpPost httpPost = new HttpPost(uri);
+            httpPost.setConfig(requestConfig);
+            MultipartEntityBuilder multipartEntityBuilder = MultipartEntityBuilder.create();
+
+            File file = new File(imgUrl);
+
+            //multipartEntityBuilder.addBinaryBody("file", file,ContentType.create("image/png"),"abc.pdf");
+            //当设置了setSocketTimeout参数后，以下代码上传PDF不能成功，将setSocketTimeout参数去掉后此可以上传成功。上传图片则没有个限制
+            //multipartEntityBuilder.addBinaryBody("file",file,ContentType.create("application/octet-stream"),"abd.pdf");
+            multipartEntityBuilder.addBinaryBody("file", file);
+            //multipartEntityBuilder.addPart("comment", new StringBody("This is comment", ContentType.TEXT_PLAIN));
+            multipartEntityBuilder.addTextBody("comment", "this is comment");
+            HttpEntity httpEntity = multipartEntityBuilder.build();
+            httpPost.setEntity(httpEntity);
+
+            httpResponse = httpClient.execute(httpPost);
+            HttpEntity responseEntity = httpResponse.getEntity();
+            int statusCode = httpResponse.getStatusLine().getStatusCode();
+            if (statusCode == 200) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(responseEntity.getContent()));
+                StringBuffer buffer = new StringBuffer();
+                String str = "";
+                while (!StringUtils.isEmpty(str = reader.readLine())) {
+                    buffer.append(str);
+                }
+
+                System.out.println(buffer.toString());
+            }
+
+            httpClient.close();
+            if (httpResponse != null) {
+                httpResponse.close();
+            }
+
+        }
+
         /**
          * 保存人脸识别事件图片
          *
@@ -314,6 +383,7 @@ public class FaceRecognitionController {
                 String strGlobalPicPathName =
                         path + "\\" + faceRecognitionInfo.UTC.toStringTitle() + "_FaceRecognition_Global.jpg";
                 faceInfo.setGlobalImgUrl(strGlobalPicPathName);
+
                 byte[] bufferGlobal =
                         pBuffer.getByteArray(
                                 faceRecognitionInfo.stuGlobalScenePicInfo.dwOffSet,
@@ -325,10 +395,11 @@ public class FaceRecognitionController {
                     if (globalBufferedImage != null) {
                         File globalFile = new File(strGlobalPicPathName);
                         if (globalFile != null) {
+                            imgUrl(strGlobalPicPathName);
                             ImageIO.write(globalBufferedImage, "jpg", globalFile);
                         }
                     }
-                } catch (IOException e2) {
+                } catch (Exception e2) {
                     e2.printStackTrace();
                 }
             }
@@ -349,10 +420,11 @@ public class FaceRecognitionController {
                     if (personBufferedImage != null) {
                         File personFile = new File(strPersonPicPathName);
                         if (personFile != null) {
+                            imgUrl(strPersonPicPathName);
                             ImageIO.write(personBufferedImage, "jpg", personFile);
                         }
                     }
-                } catch (IOException e2) {
+                } catch (Exception e2) {
                     e2.printStackTrace();
                 }
             }
@@ -398,10 +470,11 @@ public class FaceRecognitionController {
                     if (candidateBufferedImage != null) {
                         File candidateFile = new File(strCandidatePicPathName);
                         if (candidateFile != null) {
+                            imgUrl(strCandidatePicPathName);
                             ImageIO.write(candidateBufferedImage, "jpg", candidateFile);
                         }
                     }
-                } catch (IOException e2) {
+                } catch (Exception e2) {
                     e2.printStackTrace();
                 }
             }
@@ -443,10 +516,11 @@ public class FaceRecognitionController {
                     if (globalBufferedImage != null) {
                         File globalFile = new File(strGlobalPicPathName);
                         if (globalFile != null) {
+                            imgUrl(strGlobalPicPathName);
                             ImageIO.write(globalBufferedImage, "jpg", globalFile);
                         }
                     }
-                } catch (IOException e2) {
+                } catch (Exception e2) {
                     e2.printStackTrace();
                 }
             } else if (groupId == faceDetectInfo.stuObject.nRelativeID) { // /->保存人脸图
@@ -461,10 +535,11 @@ public class FaceRecognitionController {
                         if (personBufferedImage != null) {
                             File personFile = new File(strPersonPicPathName);
                             if (personFile != null) {
+                                imgUrl(strPersonPicPathName);
                                 ImageIO.write(personBufferedImage, "jpg", personFile);
                             }
                         }
-                    } catch (IOException e2) {
+                    } catch (Exception e2) {
                         e2.printStackTrace();
                     }
                 }
