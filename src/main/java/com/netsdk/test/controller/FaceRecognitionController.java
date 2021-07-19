@@ -395,8 +395,8 @@ public class FaceRecognitionController {
                     if (globalBufferedImage != null) {
                         File globalFile = new File(strGlobalPicPathName);
                         if (globalFile != null) {
-                            imgUrl(strGlobalPicPathName);
                             ImageIO.write(globalBufferedImage, "jpg", globalFile);
+                            imgUrl(strGlobalPicPathName);
                         }
                     }
                 } catch (Exception e2) {
@@ -420,8 +420,8 @@ public class FaceRecognitionController {
                     if (personBufferedImage != null) {
                         File personFile = new File(strPersonPicPathName);
                         if (personFile != null) {
-                            imgUrl(strPersonPicPathName);
                             ImageIO.write(personBufferedImage, "jpg", personFile);
+                            imgUrl(strPersonPicPathName);
                         }
                     }
                 } catch (Exception e2) {
@@ -470,8 +470,8 @@ public class FaceRecognitionController {
                     if (candidateBufferedImage != null) {
                         File candidateFile = new File(strCandidatePicPathName);
                         if (candidateFile != null) {
-                            imgUrl(strCandidatePicPathName);
                             ImageIO.write(candidateBufferedImage, "jpg", candidateFile);
+                            imgUrl(strCandidatePicPathName);
                         }
                     }
                 } catch (Exception e2) {
