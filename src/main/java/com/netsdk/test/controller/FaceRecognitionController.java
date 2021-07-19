@@ -221,6 +221,10 @@ public class FaceRecognitionController {
             }
         }
 
+        /**
+         * http
+         * post
+         */
         public void httpMethod() {
             // 获得Http客户端(可以理解为:你得先有一个浏览器;注意:实际上HttpClient与浏览器是不一样的)
             CloseableHttpClient httpClient = null;
@@ -297,9 +301,19 @@ public class FaceRecognitionController {
             }
         }
 
+        /**
+         * http picUpload
+         * @param imgUrl  上传图片路径
+         * @throws IOException
+         * @throws URISyntaxException
+         */
         public void imgUrl(String imgUrl) throws IOException, URISyntaxException {
+            //创建连接
             CloseableHttpClient httpClient = null;
             try {
+                /**
+                 * 忽略证书请求连接
+                 */
                 SSLContextBuilder builder = new SSLContextBuilder();
                 builder.loadTrustMaterial(null, new TrustStrategy() {
                     // 证书校验忽略
