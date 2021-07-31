@@ -421,7 +421,7 @@ public class TrafficEventController extends AWTEvent {
             // post请求是将参数放在请求体里面传过去的;这里将entity放入post请求体中
             httpPost.setEntity(entity);
 
-            httpPost.setHeader("Content-Type", "application/json;charset=utf8");
+            httpPost.setHeader("Content-Type", "application/json;charset=utf-8");
 
             // 响应模型
             CloseableHttpResponse response = null;
